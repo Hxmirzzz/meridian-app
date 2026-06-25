@@ -14,13 +14,14 @@ class NotificationService {
       const InitializationSettings(android: androidSettings, iOS: iosSettings),
     );
 
-    const androidChannel = AndroidNotificationChannel(
+    final androidChannel = AndroidNotificationChannel(
       'alarm_channel',
       'Alarmas',
       description: 'Canal para alarmas de Meridian',
       importance: Importance.max,
       playSound: true,
       enableVibration: true,
+      vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
     );
 
     await _notifications
@@ -38,8 +39,11 @@ class NotificationService {
       playSound: true,
       //sound: RawResourceAndroidNotificationSound('alarm'),
       enableVibration: true,
-      vibrationPattern: Int64List.fromList([0, 1000, 500, 1000]),
+      vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000, 500, 1000]),
+      category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
+      autoCancel: false,
+      ongoing: true,
     );
 
     const iosDetails = DarwinNotificationDetails(

@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:isar_community/isar.dart';
+import 'package:vibration/vibration.dart';
 import '../db/database_manager.dart';
 import '../../data/models/alarm_model.dart';
 import 'notification_service.dart';
@@ -35,21 +36,16 @@ class AlarmMonitorService {
       final activas = alarmas.where((a) => a.isActive).toList();
 
       for (var alarma in activas) {
-        // Saltar alarmas de ubicación
         if (alarma.latitude != 0.0) continue;
 
-        // Verificar días activos
         if (!alarma.activeDays[hoy]) continue;
 
-        // Verificar festivos (si aplica)
         if (alarma.excludeHolidays) {
-          // Aquí puedes agregar tu lógica de festivos
         }
 
-        // ⭐ Control anti-repetición: no disparar si ya sonó en este minuto
         if (alarma.lastTriggered != null) {
           final diff = ahora.difference(alarma.lastTriggered!);
-          if (diff.inMinutes < 1) continue; // Ya sonó hace menos de 1 minuto
+          if (diff.inMinutes < 1) continue;
         }
 
         if (alarma.alarmHour == ahora.hour && 
@@ -108,10 +104,13 @@ class AlarmMonitorService {
       [double? distancia]) async {
     _isAlarmRinging = true;
 
-    // Vibración nativa
-    HapticFeedback.heavyImpact();
+    if (await Vibration.hasVibrator()) {
+      Vibration.vibrate(
+        pattern: [0, 1000, 500, 1000],
+        repeat: 1,
+      );
+    }
     
-    // ⭐ Notificación del sistema (funciona en background también)
     await NotificationService.showAlarmNotification(
       alarma.id,
       '¡Alarma: ${alarma.name}!',
@@ -158,6 +157,8 @@ class AlarmMonitorService {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             ),
             onPressed: () async {
+              Vibration.cancel();
+
               final isar = DatabaseManager.instance!;
               await isar.writeTxn(() async {
                 await isar.alarmModels.put(alarma);
@@ -176,5 +177,6 @@ class AlarmMonitorService {
   void detenerTodo() {
     _timeMonitor?.cancel();
     _locationSubscription?.cancel();
+    Vibration.cancel();
   }
 }

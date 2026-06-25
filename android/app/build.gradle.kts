@@ -34,7 +34,6 @@ android {
             localProperties.load(FileInputStream(localPropertiesFile))
         }
         manifestPlaceholders["MAPBOX_TOKEN"] = localProperties.getProperty("MAPBOX_TOKEN", "")
-        // ----------------------------------------
     }
 
     buildTypes {
