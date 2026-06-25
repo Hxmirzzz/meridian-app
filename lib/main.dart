@@ -761,12 +761,6 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                         urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}@2x?access_token=${ApiKeys.mapboxToken}',
                         maxNativeZoom: 19,
                         userAgentPackageName: 'com.meridian.meridian',
-                        errorTileBuilder: (context, error, stackTrace) => Container(
-                          color: Colors.grey[300],
-                          child: const Center(
-                            child: Icon(Icons.map_outlined, color: Colors.grey, size: 40),
-                          ),
-                        ),
                       ),
                       
                       CircleLayer(

@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -25,11 +28,13 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        Properties properties = new Properties()
-        if (project.rootProject.file('local.properties').canRead()) {
-            properties.load(project.rootProject.file('local.properties').newDataInputStream())
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localProperties.load(FileInputStream(localPropertiesFile))
         }
-        manifestPlaceholders = [MAPBOX_TOKEN: properties.getProperty('MAPBOX_TOKEN', "")]
+        manifestPlaceholders["MAPBOX_TOKEN"] = localProperties.getProperty("MAPBOX_TOKEN", "")
+        // ----------------------------------------
     }
 
     buildTypes {
