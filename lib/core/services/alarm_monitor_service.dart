@@ -78,8 +78,14 @@ class AlarmMonitorService {
       final alarmas = await isar.alarmModels.where().anyId().findAll();
       final activas = alarmas.where((a) => a.isActive).toList();
 
+      print("📍 Alarmas activas: ${activas.length}");
+
       for (var alarma in activas) {
-        if (alarma.latitude == 0.0) continue;
+        print("   Revisando: ${alarma.name}, lat:${alarma.latitude}, lng:${alarma.longitude}");
+        if (alarma.latitude == 0.0) {
+          print("   ❌ Saltada: es alarma de reloj");
+          continue;
+        }
 
         double distancia = Geolocator.distanceBetween(
           posicionActual.latitude,

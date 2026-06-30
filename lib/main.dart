@@ -28,6 +28,16 @@ void main() async {
     await Permission.notification.request();
   }
 
+  var locationStatus = await Permission.location.status;
+  if (locationStatus.isDenied) {
+    locationStatus = await Permission.location.request();
+  }
+
+  var backgroundLocationStatus = await Permission.locationAlways.status;
+  if (backgroundLocationStatus.isDenied) {
+    backgroundLocationStatus = await Permission.locationAlways.request();
+  }
+
   try {
     final dir = await getApplicationDocumentsDirectory();
     await Isar.open(
@@ -35,7 +45,6 @@ void main() async {
       directory: dir.path,
       name: "meridian_db",
     );
-    print("✅ ISAR INICIALIZADO CORRECTAMENTE");
   } catch (e) {
     print("⚠️ ERROR INICIANDO ISAR (Modo UI seguro activado): $e");
   }
