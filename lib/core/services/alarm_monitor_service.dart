@@ -8,6 +8,7 @@ import '../db/database_manager.dart';
 import '../../data/models/alarm_model.dart';
 import 'notification_service.dart';
 import 'alarm_sound_service.dart';
+import 'holiday_service.dart';
 
 class AlarmMonitorService {
   static final AlarmMonitorService _instance = AlarmMonitorService._internal();
@@ -46,6 +47,13 @@ class AlarmMonitorService {
           if (diff.inMinutes < 1) continue;
         }
 
+        if (alarma.excludeHolidays) {
+          if (HolidayService().isHoliday(ahora)) {
+            print("   ❌ Saltada: hoy es festivo");
+            continue;
+          }
+        }
+
         if (alarma.alarmHour == ahora.hour && 
             alarma.alarmMinute == ahora.minute) {
           await isar.writeTxn(() async {
@@ -70,21 +78,30 @@ class AlarmMonitorService {
         distanceFilter: 10,
       ),
     ).listen((Position posicionActual) async {
-      if (_isAlarmRinging) return;
 
+      final ahora = DateTime.now();
+
+      if (_isAlarmRinging) return;
+      
       final isar = DatabaseManager.instance;
       if (isar == null) return;
 
       final alarmas = await isar.alarmModels.where().anyId().findAll();
       final activas = alarmas.where((a) => a.isActive).toList();
 
-      print("📍 Alarmas activas: ${activas.length}");
-
       for (var alarma in activas) {
         print("   Revisando: ${alarma.name}, lat:${alarma.latitude}, lng:${alarma.longitude}");
         if (alarma.latitude == 0.0) {
           print("   ❌ Saltada: es alarma de reloj");
           continue;
+        }
+
+        if (alarma.lastTriggered != null) {
+          final diff = ahora.difference(alarma.lastTriggered!);
+          if (diff.inHours < 24) {
+            print("   ❌ Saltada: ya sonó hoy (GPS)");
+            continue;
+          }
         }
 
         double distancia = Geolocator.distanceBetween(
@@ -95,6 +112,13 @@ class AlarmMonitorService {
         );
 
         if (distancia <= alarma.radiusMeters) {
+          print("   ✅ DENTRO DEL RADIO! Disparando...");
+          
+          await isar.writeTxn(() async {
+            alarma.lastTriggered = DateTime.now();
+            await isar.alarmModels.put(alarma);
+          });
+          
           _dispararAlarma(context, alarma, distancia);
           break;
         }

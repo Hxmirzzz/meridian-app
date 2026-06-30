@@ -18,6 +18,8 @@ import 'core/constants/api_keys.dart';
 import 'core/db/database_manager.dart';
 import 'core/services/alarm_monitor_service.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/holiday_service.dart';
+import 'presentation/screens/holidays_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,7 +96,8 @@ class _MainNavigatorState extends State<MainNavigator> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await HolidayService().init();
       AlarmMonitorService().iniciarMonitoreo(context);
     });
   }
@@ -572,6 +575,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
   void _abrirConfiguracionAlarma(BuildContext context) {
     bool ignorarFestivos = true;
     final _nombreRutaController = TextEditingController();
+    double _radioSeleccionado = 500;
 
     showModalBottomSheet(
       context: context,
@@ -610,25 +614,56 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    
+                    // ⭐ REEMPLAZADO: Container del radio fijo por Slider configurable
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(15)),
-                      child: const Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.radar, color: Colors.blue),
-                          SizedBox(width: 15),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Radio de alerta: 500 metros', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                                Text('Tu teléfono vibrará cuando estés a esta distancia.', style: TextStyle(fontSize: 12)),
-                              ],
-                            ),
+                          Row(
+                            children: [
+                              const Icon(Icons.radar, color: Colors.blue),
+                              const SizedBox(width: 15),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Radio de alerta: ${_radioSeleccionado.toInt()} metros',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                                    ),
+                                    const Text('Ajusta el radio para la demostración', style: TextStyle(fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          Slider(
+                            value: _radioSeleccionado,
+                            min: 100,
+                            max: 2000,
+                            divisions: 19, // 100, 200, 300... 2000
+                            label: '${_radioSeleccionado.toInt()}m',
+                            activeColor: const Color(0xFF2563EB),
+                            onChanged: (value) {
+                              setModalState(() {
+                                _radioSeleccionado = value;
+                              });
+                            },
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('100m', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                              Text('2000m', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                            ],
                           ),
                         ],
                       ),
                     ),
+                    
                     const SizedBox(height: 20),
                     SwitchListTile(
                       title: const Text('Silenciar en festivos', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -658,7 +693,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                               ..name = _nombreRutaController.text.trim().isEmpty ? "Destino en Mapa" : _nombreRutaController.text.trim()
                               ..latitude = _destinoActual.latitude
                               ..longitude = _destinoActual.longitude
-                              ..radiusMeters = 500
+                              ..radiusMeters = _radioSeleccionado.toInt() // ⭐ USA EL RADIO SELECCIONADO
                               ..isActive = true
                               ..excludeHolidays = ignorarFestivos
                               ..createdAt = DateTime.now()
@@ -1109,6 +1144,22 @@ class _SettingsPremiumScreenState extends State<SettingsPremiumScreen> {
           _buildSectionHeader("Opciones Avanzadas"),
           _buildSettingsCard([
             _buildSettingsRow(Icons.calendar_month, "Silenciar días festivos", festivos, Colors.purple, (v) => setState(() => festivos = v)),
+            _buildDivider(),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.edit_calendar, color: Colors.red, size: 20),
+              ),
+              title: const Text('Administrar festivos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+              trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => HolidaysScreen()),
+                );
+              },
+            ),
           ]),
         ],
       ),

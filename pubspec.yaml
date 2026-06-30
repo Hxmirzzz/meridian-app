@@ -45,6 +45,8 @@ dependencies:
   flutter_dotenv: ^6.0.1
   vibration: ^3.2.0
   audioplayers: ^6.8.1
+  shared_preferences: ^2.2.3
+  table_calendar: ^3.0.9
 
 dev_dependencies:
   flutter_test:
@@ -74,6 +76,7 @@ flutter:
   assets:
     - .env
     - assets/sounds/alarm.mp3
+    - assets/data/holidays_colombia.json
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 
