@@ -15,7 +15,7 @@ class NotificationService {
     );
 
     final androidChannel = AndroidNotificationChannel(
-      'alarm_channel',
+      'alarm_channel_v3',
       'Alarmas',
       description: 'Canal para alarmas de Meridian',
       importance: Importance.max,
@@ -37,7 +37,6 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
-      //sound: RawResourceAndroidNotificationSound('alarm'),
       enableVibration: true,
       vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000, 500, 1000]),
       category: AndroidNotificationCategory.alarm,

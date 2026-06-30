@@ -7,6 +7,7 @@ import 'package:vibration/vibration.dart';
 import '../db/database_manager.dart';
 import '../../data/models/alarm_model.dart';
 import 'notification_service.dart';
+import 'alarm_sound_service.dart';
 
 class AlarmMonitorService {
   static final AlarmMonitorService _instance = AlarmMonitorService._internal();
@@ -99,6 +100,8 @@ class AlarmMonitorService {
       [double? distancia]) async {
     _isAlarmRinging = true;
 
+    await AlarmSoundService.playAlarm();
+
     if (await Vibration.hasVibrator()) {
       Vibration.vibrate(
         pattern: [0, 1000, 500, 1000],
@@ -152,6 +155,7 @@ class AlarmMonitorService {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             ),
             onPressed: () async {
+              await AlarmSoundService.stop();
               Vibration.cancel();
 
               final isar = DatabaseManager.instance!;
