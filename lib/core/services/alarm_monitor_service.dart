@@ -30,7 +30,7 @@ class AlarmMonitorService {
       if (isar == null) return;
 
       final ahora = DateTime.now();
-      final hoy = ahora.weekday % 7; // 0=Dom, 1=Lun...
+      final hoy = (ahora.weekday - 1) % 7;
 
       final alarmas = await isar.alarmModels.where().anyId().findAll();
       final activas = alarmas.where((a) => a.isActive).toList();
@@ -40,9 +40,6 @@ class AlarmMonitorService {
 
         if (!alarma.activeDays[hoy]) continue;
 
-        if (alarma.excludeHolidays) {
-        }
-
         if (alarma.lastTriggered != null) {
           final diff = ahora.difference(alarma.lastTriggered!);
           if (diff.inMinutes < 1) continue;
@@ -50,8 +47,6 @@ class AlarmMonitorService {
 
         if (alarma.alarmHour == ahora.hour && 
             alarma.alarmMinute == ahora.minute) {
-          
-          // Marcar como disparada
           await isar.writeTxn(() async {
             alarma.lastTriggered = ahora;
             await isar.alarmModels.put(alarma);
