@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
@@ -6,12 +7,18 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications = 
       FlutterLocalNotificationsPlugin();
 
+  static final StreamController<String> _alarmActionController = 
+      StreamController<String>.broadcast();
+  static Stream<String> get onAlarmAction => _alarmActionController.stream;
+
   static Future<void> init() async {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings();
     
     await _notifications.initialize(
       const InitializationSettings(android: androidSettings, iOS: iosSettings),
+      onDidReceiveNotificationResponse: _onNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse: _onBackgroundNotificationResponse,
     );
 
     final androidChannel = AndroidNotificationChannel(
@@ -43,6 +50,15 @@ class NotificationService {
       fullScreenIntent: true,
       autoCancel: false,
       ongoing: true,
+      visibility: NotificationVisibility.public,
+      actions: [
+        const AndroidNotificationAction(
+          'stop_alarm',
+          '🔴 APAGAR ALARMA',
+          showsUserInterface: true,
+          cancelNotification: false,
+        ),
+      ],
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -61,5 +77,18 @@ class NotificationService {
 
   static Future<void> cancelNotification(int id) async {
     await _notifications.cancel(id);
+  }
+
+  static void _onNotificationResponse(NotificationResponse response) {
+    if (response.actionId == 'stop_alarm') {
+      _alarmActionController.add('open');
+    }
+  }
+
+  @pragma('vm:entry-point')
+  static void _onBackgroundNotificationResponse(NotificationResponse response) {
+    if (response.actionId == 'stop_alarm') {
+      _notifications.cancel(response.id ?? 0);
+    }
   }
 }

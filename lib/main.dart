@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:vibration/vibration.dart';
 import 'data/datasources/location_hardware_source.dart';
 import 'data/repositories/location_repository_impl.dart';
 import 'domain/repositories/location_repository.dart';
@@ -20,6 +21,7 @@ import 'core/db/database_manager.dart';
 import 'core/services/alarm_monitor_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/holiday_service.dart';
+import 'core/services/alarm_sound_service.dart';
 import 'presentation/screens/holidays_screen.dart';
 import 'core/services/gps_foreground_service.dart';
 
@@ -96,7 +98,7 @@ class MainNavigator extends StatefulWidget {
   State<MainNavigator> createState() => _MainNavigatorState();
 }
 
-class _MainNavigatorState extends State<MainNavigator> {
+class _MainNavigatorState extends State<MainNavigator> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
@@ -109,7 +111,15 @@ class _MainNavigatorState extends State<MainNavigator> {
   @override
   void initState() {
     super.initState();
+
+    NotificationService.onAlarmAction.listen((action) {
+      if (action == 'stop') {
+        AlarmMonitorService().apagarAlarmaDesdeNotificacion();
+      }
+    });
+
     FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
+    WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await HolidayService().init();
@@ -122,9 +132,91 @@ class _MainNavigatorState extends State<MainNavigator> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
     AlarmMonitorService().detenerTodo();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkAndShowAlarmDialog();
+    }
+  }
+
+  void _checkAndShowAlarmDialog() {
+    final monitor = AlarmMonitorService();
+    if (monitor.isAlarmRingingPublic && monitor.currentAlarm != null && mounted) {
+      _showAlarmDialog(monitor.currentAlarm!);
+    }
+  }
+
+  void _showAlarmDialog(AlarmModel alarma) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        title: Column(
+          children: [
+            Icon(
+              alarma.latitude == 0.0 ? Icons.alarm_on : Icons.location_on, 
+              size: 60, 
+              color: Colors.red,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "¡Alarma: ${alarma.name}!", 
+              textAlign: TextAlign.center, 
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          alarma.latitude == 0.0
+              ? "Es hora de tu alarma programada."
+              : "Has entrado a la zona de tu destino.",
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            ),
+            onPressed: () async {
+              Vibration.cancel();
+              await AlarmSoundService.stop();
+
+              final isar = DatabaseManager.instance!;
+              await isar.writeTxn(() async {
+                alarma.lastTriggered = DateTime.now();
+                await isar.alarmModels.put(alarma);
+              });
+              
+              AlarmMonitorService().apagarAlarmaDesdeNotificacion();
+              await NotificationService.cancelNotification(alarma.id);
+              
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text("APAGAR ALARMA"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onReceiveTaskData(Object data) {
+    if (data is Map<String, dynamic> && data['type'] == 'location') {
+      AlarmMonitorService().procesarPosicionForeground(
+        data['lat'] as double,
+        data['lng'] as double,
+      );
+    }
   }
 
   @override

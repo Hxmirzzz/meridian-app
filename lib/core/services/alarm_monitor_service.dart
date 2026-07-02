@@ -17,6 +17,10 @@ class AlarmMonitorService {
 
   Timer? _timeMonitor;
   bool _isAlarmRinging = false;
+  AlarmModel? _currentAlarm; 
+
+  bool get isAlarmRingingPublic => _isAlarmRinging;
+  AlarmModel? get currentAlarm => _currentAlarm;
 
   void iniciarMonitoreo(BuildContext context) {
     _iniciarMonitoreoReloj(context);
@@ -66,10 +70,6 @@ class AlarmMonitorService {
     });
   }
 
-  // ============================================================
-  // ✅ NUEVO: Recibe coordenadas del foreground service
-  // Este método reemplaza al _iniciarMonitoreoGPS() anterior
-  // ============================================================
   void procesarPosicionForeground(double lat, double lng) async {
     print("📍 [Main] Posición desde foreground: $lat, $lng");
 
@@ -143,12 +143,9 @@ class AlarmMonitorService {
     }
   }
 
-  // ============================================================
-  // Disparar alarma GPS cuando la app está en background
-  // (sin context, solo notificación + sonido + vibración)
-  // ============================================================
   void _dispararAlarmaDesdeForeground(AlarmModel alarma, double distancia) async {
     _isAlarmRinging = true;
+    _currentAlarm = alarma;
 
     await AlarmSoundService.playAlarm();
 
@@ -163,9 +160,6 @@ class AlarmMonitorService {
     );
   }
 
-  // ============================================================
-  // Disparar alarma cuando la app está abierta (con diálogo)
-  // ============================================================
   void _dispararAlarma(BuildContext? context, AlarmModel alarma, 
       [double? distancia]) async {
     _isAlarmRinging = true;
@@ -242,6 +236,16 @@ class AlarmMonitorService {
         ),
       );
     }
+  }
+
+  void apagarAlarmaDesdeNotificacion() async {
+    if (!_isAlarmRinging) return;
+    
+    print('🔴 Apagando alarma desde notificación...');
+    Vibration.cancel();
+    await AlarmSoundService.stop();
+    _isAlarmRinging = false;
+    _currentAlarm = null;
   }
 
   void detenerTodo() {
