@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'data/datasources/location_hardware_source.dart';
 import 'data/repositories/location_repository_impl.dart';
 import 'domain/repositories/location_repository.dart';
@@ -20,11 +21,23 @@ import 'core/services/alarm_monitor_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/holiday_service.dart';
 import 'presentation/screens/holidays_screen.dart';
+import 'core/services/gps_foreground_service.dart';
+
+void _onReceiveTaskData(Object data) {
+  if (data is Map<String, dynamic> && data['type'] == 'location') {
+    AlarmMonitorService().procesarPosicionForeground(
+      data['lat'] as double,
+      data['lng'] as double,
+    );
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
   await NotificationService.init();
+
+  FlutterForegroundTask.initCommunicationPort();
 
   if (await Permission.notification.isDenied) {
     await Permission.notification.request();
@@ -96,14 +109,20 @@ class _MainNavigatorState extends State<MainNavigator> {
   @override
   void initState() {
     super.initState();
+    FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await HolidayService().init();
+      await GpsForegroundService.initialize();
+      await GpsForegroundService.requestPermissions();
+      await GpsForegroundService.start();
       AlarmMonitorService().iniciarMonitoreo(context);
     });
   }
 
   @override
   void dispose() {
+    FlutterForegroundTask.removeTaskDataCallback(_onReceiveTaskData);
     AlarmMonitorService().detenerTodo();
     super.dispose();
   }

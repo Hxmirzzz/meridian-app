@@ -16,12 +16,10 @@ class AlarmMonitorService {
   AlarmMonitorService._internal();
 
   Timer? _timeMonitor;
-  StreamSubscription<Position>? _locationSubscription;
   bool _isAlarmRinging = false;
 
   void iniciarMonitoreo(BuildContext context) {
     _iniciarMonitoreoReloj(context);
-    _iniciarMonitoreoGPS(context);
   }
 
   void _iniciarMonitoreoReloj(BuildContext context) {
@@ -68,106 +66,107 @@ class AlarmMonitorService {
     });
   }
 
-  void _iniciarMonitoreoGPS(BuildContext context) async {
-    print("📍 Iniciando monitoreo GPS...");
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    print("📍 GPS habilitado: $serviceEnabled");
-    if (!serviceEnabled) {
-      print("❌ GPS no habilitado, saliendo");
+  // ============================================================
+  // ✅ NUEVO: Recibe coordenadas del foreground service
+  // Este método reemplaza al _iniciarMonitoreoGPS() anterior
+  // ============================================================
+  void procesarPosicionForeground(double lat, double lng) async {
+    print("📍 [Main] Posición desde foreground: $lat, $lng");
+
+    if (_isAlarmRinging) {
+      print("⏰ Ya hay alarma sonando, saltando");
       return;
     }
 
-    _locationSubscription = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.best,
-        distanceFilter: 1,
-      ),
-    ).listen(
-      (Position posicionActual) async {
-        print("📍 Nueva posición: ${posicionActual.latitude}, ${posicionActual.longitude}");
-        
-        final ahora = DateTime.now();
-        
-        if (_isAlarmRinging) {
-          print("⏰ Ya hay alarma sonando, saltando");
-          return;
+    final ahora = DateTime.now();
+    final isar = DatabaseManager.instance;
+    if (isar == null) {
+      print("❌ isar es null");
+      return;
+    }
+
+    final alarmas = await isar.alarmModels.where().anyId().findAll();
+    final activas = alarmas.where((a) => a.isActive).toList();
+    print("📍 Alarmas activas: ${activas.length}");
+
+    for (var alarma in activas) {
+      print("   Revisando: ${alarma.name}, lat:${alarma.latitude}, lng:${alarma.longitude}");
+      if (alarma.latitude == 0.0) {
+        print("   ❌ Saltada: es alarma de reloj");
+        continue;
+      }
+
+      // Control anti-repetición de 24 horas
+      if (alarma.lastTriggered != null) {
+        final diff = ahora.difference(alarma.lastTriggered!);
+        if (diff.inHours < 24) {
+          print("   ❌ Saltada: ya sonó hoy (GPS)");
+          continue;
+        }
+      }
+
+      double distancia = Geolocator.distanceBetween(
+        lat,
+        lng,
+        alarma.latitude,
+        alarma.longitude,
+      );
+
+      print("   📏 Distancia: ${distancia.toInt()}m (radio: ${alarma.radiusMeters}m)");
+
+      if (distancia <= alarma.radiusMeters) {
+        if (alarma.isInsideRadius) {
+          print("   ⏳ Ya está dentro del radio, no sonar");
+          continue;
         }
 
-        final isar = DatabaseManager.instance;
-        if (isar == null) {
-          print("❌ isar es null");
-          return;
+        print("   ✅ ENTRÓ AL RADIO! Disparando...");
+
+        await isar.writeTxn(() async {
+          alarma.isInsideRadius = true;
+          alarma.lastTriggered = DateTime.now();
+          await isar.alarmModels.put(alarma);
+        });
+
+        _dispararAlarmaDesdeForeground(alarma, distancia);
+        break;
+      } else {
+        if (alarma.isInsideRadius) {
+          print("   🚪 Salió del radio, reseteando...");
+          await isar.writeTxn(() async {
+            alarma.isInsideRadius = false;
+            await isar.alarmModels.put(alarma);
+          });
         }
-
-        final alarmas = await isar.alarmModels.where().anyId().findAll();
-        final activas = alarmas.where((a) => a.isActive).toList();
-        print("📍 Alarmas activas: ${activas.length}");
-
-        for (var alarma in activas) {
-          print("   Revisando: ${alarma.name}, lat:${alarma.latitude}, lng:${alarma.longitude}");
-          if (alarma.latitude == 0.0) {
-            print("   ❌ Saltada: es alarma de reloj");
-            continue;
-          }
-
-          // Control anti-repetición de 24 horas
-          if (alarma.lastTriggered != null) {
-            final diff = ahora.difference(alarma.lastTriggered!);
-            if (diff.inHours < 24) {
-              print("   ❌ Saltada: ya sonó hoy (GPS)");
-              continue;
-            }
-          }
-
-          double distancia = Geolocator.distanceBetween(
-            posicionActual.latitude,
-            posicionActual.longitude,
-            alarma.latitude,
-            alarma.longitude,
-          );
-
-          print("   📏 Distancia: ${distancia.toInt()}m (radio: ${alarma.radiusMeters}m)");
-
-          if (distancia <= alarma.radiusMeters) {
-            // ⭐ ESTÁ DENTRO DEL RADIO
-            if (alarma.isInsideRadius) {
-              print("   ⏳ Ya está dentro del radio, no sonar");
-              continue; // Ya está dentro y ya sonó, no repetir
-            }
-            
-            print("   ✅ ENTRÓ AL RADIO! Disparando...");
-            
-            // Marcar como dentro del radio
-            await isar.writeTxn(() async {
-              alarma.isInsideRadius = true;
-              alarma.lastTriggered = DateTime.now();
-              await isar.alarmModels.put(alarma);
-            });
-            
-            _dispararAlarma(context, alarma, distancia);
-            break;
-          } else {
-            // ⭐ ESTÁ FUERA DEL RADIO
-            if (alarma.isInsideRadius) {
-              print("   🚪 Salió del radio, reseteando...");
-              await isar.writeTxn(() async {
-                alarma.isInsideRadius = false;
-                await isar.alarmModels.put(alarma);
-              });
-            }
-            print("   ❌ Fuera del radio");
-          }
-        }
-      },
-      onError: (error) {
-        print("❌ ERROR en stream de GPS: $error");
-      },
-    );
-
-    print("📍 Stream de GPS iniciado correctamente");
+        print("   ❌ Fuera del radio");
+      }
+    }
   }
 
-  void _dispararAlarma(BuildContext context, AlarmModel alarma, 
+  // ============================================================
+  // Disparar alarma GPS cuando la app está en background
+  // (sin context, solo notificación + sonido + vibración)
+  // ============================================================
+  void _dispararAlarmaDesdeForeground(AlarmModel alarma, double distancia) async {
+    _isAlarmRinging = true;
+
+    await AlarmSoundService.playAlarm();
+
+    if (await Vibration.hasVibrator()) {
+      Vibration.vibrate(pattern: [0, 1000, 500, 1000], repeat: 1);
+    }
+
+    await NotificationService.showAlarmNotification(
+      alarma.id,
+      '¡Alarma: ${alarma.name}!',
+      'Estás a ${distancia.toInt()} metros de tu destino.',
+    );
+  }
+
+  // ============================================================
+  // Disparar alarma cuando la app está abierta (con diálogo)
+  // ============================================================
+  void _dispararAlarma(BuildContext? context, AlarmModel alarma, 
       [double? distancia]) async {
     _isAlarmRinging = true;
 
@@ -179,7 +178,7 @@ class AlarmMonitorService {
         repeat: 1,
       );
     }
-    
+
     await NotificationService.showAlarmNotification(
       alarma.id,
       '¡Alarma: ${alarma.name}!',
@@ -188,66 +187,65 @@ class AlarmMonitorService {
           : 'Es hora de tu alarma programada.',
     );
 
-    if (!context.mounted) return;
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
-        title: Column(
-          children: [
-            Icon(
-              alarma.latitude == 0.0 ? Icons.alarm_on : Icons.location_on, 
-              size: 60, 
-              color: Colors.red,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              "¡Alarma: ${alarma.name}!", 
-              textAlign: TextAlign.center, 
-              style: const TextStyle(fontWeight: FontWeight.bold),
+    if (context != null && context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.white,
+          title: Column(
+            children: [
+              Icon(
+                alarma.latitude == 0.0 ? Icons.alarm_on : Icons.location_on, 
+                size: 60, 
+                color: Colors.red,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "¡Alarma: ${alarma.name}!", 
+                textAlign: TextAlign.center, 
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Text(
+            distancia != null 
+                ? "Has entrado a la zona de tu destino. Estás a ${distancia.toInt()} metros." 
+                : "Es hora de tu alarma programada.",
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              ),
+              onPressed: () async {
+                Vibration.cancel();
+                await AlarmSoundService.stop();
+
+                final isar = DatabaseManager.instance!;
+                await isar.writeTxn(() async {
+                  alarma.lastTriggered = DateTime.now();
+                  await isar.alarmModels.put(alarma);
+                });
+                _isAlarmRinging = false;
+                await NotificationService.cancelNotification(alarma.id);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text("APAGAR ALARMA"),
             ),
           ],
         ),
-        content: Text(
-          distancia != null 
-              ? "Has entrado a la zona de tu destino. Estás a ${distancia.toInt()} metros." 
-              : "Es hora de tu alarma programada.",
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            ),
-            onPressed: () async {
-              Vibration.cancel();
-              await AlarmSoundService.stop();
-
-              final isar = DatabaseManager.instance!;
-              await isar.writeTxn(() async {
-                alarma.lastTriggered = DateTime.now();
-                await isar.alarmModels.put(alarma);
-              });
-              _isAlarmRinging = false;
-              await NotificationService.cancelNotification(alarma.id);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text("APAGAR ALARMA"),
-          ),
-        ],
-      ),
-    );
+      );
+    }
   }
 
   void detenerTodo() {
     _timeMonitor?.cancel();
-    _locationSubscription?.cancel();
     Vibration.cancel();
   }
 }
