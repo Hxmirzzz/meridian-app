@@ -69,61 +69,102 @@ class AlarmMonitorService {
   }
 
   void _iniciarMonitoreoGPS(BuildContext context) async {
+    print("📍 Iniciando monitoreo GPS...");
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+    print("📍 GPS habilitado: $serviceEnabled");
+    if (!serviceEnabled) {
+      print("❌ GPS no habilitado, saliendo");
+      return;
+    }
 
     _locationSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high, 
-        distanceFilter: 10,
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 1,
       ),
-    ).listen((Position posicionActual) async {
-
-      final ahora = DateTime.now();
-
-      if (_isAlarmRinging) return;
-      
-      final isar = DatabaseManager.instance;
-      if (isar == null) return;
-
-      final alarmas = await isar.alarmModels.where().anyId().findAll();
-      final activas = alarmas.where((a) => a.isActive).toList();
-
-      for (var alarma in activas) {
-        print("   Revisando: ${alarma.name}, lat:${alarma.latitude}, lng:${alarma.longitude}");
-        if (alarma.latitude == 0.0) {
-          print("   ❌ Saltada: es alarma de reloj");
-          continue;
+    ).listen(
+      (Position posicionActual) async {
+        print("📍 Nueva posición: ${posicionActual.latitude}, ${posicionActual.longitude}");
+        
+        final ahora = DateTime.now();
+        
+        if (_isAlarmRinging) {
+          print("⏰ Ya hay alarma sonando, saltando");
+          return;
         }
 
-        if (alarma.lastTriggered != null) {
-          final diff = ahora.difference(alarma.lastTriggered!);
-          if (diff.inHours < 24) {
-            print("   ❌ Saltada: ya sonó hoy (GPS)");
+        final isar = DatabaseManager.instance;
+        if (isar == null) {
+          print("❌ isar es null");
+          return;
+        }
+
+        final alarmas = await isar.alarmModels.where().anyId().findAll();
+        final activas = alarmas.where((a) => a.isActive).toList();
+        print("📍 Alarmas activas: ${activas.length}");
+
+        for (var alarma in activas) {
+          print("   Revisando: ${alarma.name}, lat:${alarma.latitude}, lng:${alarma.longitude}");
+          if (alarma.latitude == 0.0) {
+            print("   ❌ Saltada: es alarma de reloj");
             continue;
           }
-        }
 
-        double distancia = Geolocator.distanceBetween(
-          posicionActual.latitude,
-          posicionActual.longitude,
-          alarma.latitude,
-          alarma.longitude,
-        );
+          // Control anti-repetición de 24 horas
+          if (alarma.lastTriggered != null) {
+            final diff = ahora.difference(alarma.lastTriggered!);
+            if (diff.inHours < 24) {
+              print("   ❌ Saltada: ya sonó hoy (GPS)");
+              continue;
+            }
+          }
 
-        if (distancia <= alarma.radiusMeters) {
-          print("   ✅ DENTRO DEL RADIO! Disparando...");
-          
-          await isar.writeTxn(() async {
-            alarma.lastTriggered = DateTime.now();
-            await isar.alarmModels.put(alarma);
-          });
-          
-          _dispararAlarma(context, alarma, distancia);
-          break;
+          double distancia = Geolocator.distanceBetween(
+            posicionActual.latitude,
+            posicionActual.longitude,
+            alarma.latitude,
+            alarma.longitude,
+          );
+
+          print("   📏 Distancia: ${distancia.toInt()}m (radio: ${alarma.radiusMeters}m)");
+
+          if (distancia <= alarma.radiusMeters) {
+            // ⭐ ESTÁ DENTRO DEL RADIO
+            if (alarma.isInsideRadius) {
+              print("   ⏳ Ya está dentro del radio, no sonar");
+              continue; // Ya está dentro y ya sonó, no repetir
+            }
+            
+            print("   ✅ ENTRÓ AL RADIO! Disparando...");
+            
+            // Marcar como dentro del radio
+            await isar.writeTxn(() async {
+              alarma.isInsideRadius = true;
+              alarma.lastTriggered = DateTime.now();
+              await isar.alarmModels.put(alarma);
+            });
+            
+            _dispararAlarma(context, alarma, distancia);
+            break;
+          } else {
+            // ⭐ ESTÁ FUERA DEL RADIO
+            if (alarma.isInsideRadius) {
+              print("   🚪 Salió del radio, reseteando...");
+              await isar.writeTxn(() async {
+                alarma.isInsideRadius = false;
+                await isar.alarmModels.put(alarma);
+              });
+            }
+            print("   ❌ Fuera del radio");
+          }
         }
-      }
-    });
+      },
+      onError: (error) {
+        print("❌ ERROR en stream de GPS: $error");
+      },
+    );
+
+    print("📍 Stream de GPS iniciado correctamente");
   }
 
   void _dispararAlarma(BuildContext context, AlarmModel alarma, 
@@ -185,11 +226,12 @@ class AlarmMonitorService {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
             ),
             onPressed: () async {
-              await AlarmSoundService.stop();
               Vibration.cancel();
+              await AlarmSoundService.stop();
 
               final isar = DatabaseManager.instance!;
               await isar.writeTxn(() async {
+                alarma.lastTriggered = DateTime.now();
                 await isar.alarmModels.put(alarma);
               });
               _isAlarmRinging = false;

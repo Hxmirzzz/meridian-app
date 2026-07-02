@@ -43,24 +43,29 @@ const AlarmModelSchema = CollectionSchema(
       type: IsarType.bool,
     ),
     r'isActive': PropertySchema(id: 5, name: r'isActive', type: IsarType.bool),
-    r'lastTriggered': PropertySchema(
+    r'isInsideRadius': PropertySchema(
       id: 6,
+      name: r'isInsideRadius',
+      type: IsarType.bool,
+    ),
+    r'lastTriggered': PropertySchema(
+      id: 7,
       name: r'lastTriggered',
       type: IsarType.dateTime,
     ),
     r'latitude': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'latitude',
       type: IsarType.double,
     ),
     r'longitude': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'longitude',
       type: IsarType.double,
     ),
-    r'name': PropertySchema(id: 9, name: r'name', type: IsarType.string),
+    r'name': PropertySchema(id: 10, name: r'name', type: IsarType.string),
     r'radiusMeters': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'radiusMeters',
       type: IsarType.long,
     ),
@@ -118,11 +123,12 @@ void _alarmModelSerialize(
   writer.writeDateTime(offsets[3], object.createdAt);
   writer.writeBool(offsets[4], object.excludeHolidays);
   writer.writeBool(offsets[5], object.isActive);
-  writer.writeDateTime(offsets[6], object.lastTriggered);
-  writer.writeDouble(offsets[7], object.latitude);
-  writer.writeDouble(offsets[8], object.longitude);
-  writer.writeString(offsets[9], object.name);
-  writer.writeLong(offsets[10], object.radiusMeters);
+  writer.writeBool(offsets[6], object.isInsideRadius);
+  writer.writeDateTime(offsets[7], object.lastTriggered);
+  writer.writeDouble(offsets[8], object.latitude);
+  writer.writeDouble(offsets[9], object.longitude);
+  writer.writeString(offsets[10], object.name);
+  writer.writeLong(offsets[11], object.radiusMeters);
 }
 
 AlarmModel _alarmModelDeserialize(
@@ -139,11 +145,12 @@ AlarmModel _alarmModelDeserialize(
   object.excludeHolidays = reader.readBool(offsets[4]);
   object.id = id;
   object.isActive = reader.readBool(offsets[5]);
-  object.lastTriggered = reader.readDateTimeOrNull(offsets[6]);
-  object.latitude = reader.readDouble(offsets[7]);
-  object.longitude = reader.readDouble(offsets[8]);
-  object.name = reader.readString(offsets[9]);
-  object.radiusMeters = reader.readLong(offsets[10]);
+  object.isInsideRadius = reader.readBool(offsets[6]);
+  object.lastTriggered = reader.readDateTimeOrNull(offsets[7]);
+  object.latitude = reader.readDouble(offsets[8]);
+  object.longitude = reader.readDouble(offsets[9]);
+  object.name = reader.readString(offsets[10]);
+  object.radiusMeters = reader.readLong(offsets[11]);
   return object;
 }
 
@@ -167,14 +174,16 @@ P _alarmModelDeserializeProp<P>(
     case 5:
       return (reader.readBool(offset)) as P;
     case 6:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 7:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 8:
       return (reader.readDouble(offset)) as P;
     case 9:
-      return (reader.readString(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 10:
+      return (reader.readString(offset)) as P;
+    case 11:
       return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -634,6 +643,15 @@ extension AlarmModelQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(
         FilterCondition.equalTo(property: r'isActive', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<AlarmModel, AlarmModel, QAfterFilterCondition>
+  isInsideRadiusEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'isInsideRadius', value: value),
       );
     });
   }
@@ -1132,6 +1150,19 @@ extension AlarmModelQuerySortBy
     });
   }
 
+  QueryBuilder<AlarmModel, AlarmModel, QAfterSortBy> sortByIsInsideRadius() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isInsideRadius', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AlarmModel, AlarmModel, QAfterSortBy>
+  sortByIsInsideRadiusDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isInsideRadius', Sort.desc);
+    });
+  }
+
   QueryBuilder<AlarmModel, AlarmModel, QAfterSortBy> sortByLastTriggered() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'lastTriggered', Sort.asc);
@@ -1268,6 +1299,19 @@ extension AlarmModelQuerySortThenBy
     });
   }
 
+  QueryBuilder<AlarmModel, AlarmModel, QAfterSortBy> thenByIsInsideRadius() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isInsideRadius', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AlarmModel, AlarmModel, QAfterSortBy>
+  thenByIsInsideRadiusDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isInsideRadius', Sort.desc);
+    });
+  }
+
   QueryBuilder<AlarmModel, AlarmModel, QAfterSortBy> thenByLastTriggered() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'lastTriggered', Sort.asc);
@@ -1367,6 +1411,12 @@ extension AlarmModelQueryWhereDistinct
     });
   }
 
+  QueryBuilder<AlarmModel, AlarmModel, QDistinct> distinctByIsInsideRadius() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isInsideRadius');
+    });
+  }
+
   QueryBuilder<AlarmModel, AlarmModel, QDistinct> distinctByLastTriggered() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'lastTriggered');
@@ -1441,6 +1491,12 @@ extension AlarmModelQueryProperty
   QueryBuilder<AlarmModel, bool, QQueryOperations> isActiveProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'isActive');
+    });
+  }
+
+  QueryBuilder<AlarmModel, bool, QQueryOperations> isInsideRadiusProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isInsideRadius');
     });
   }
 

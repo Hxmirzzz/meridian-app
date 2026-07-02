@@ -20,6 +20,7 @@ class AlarmModel {
   late int alarmMinute;
   List<bool> activeDays = [true, true, true, true, true, false, false];
   DateTime? lastTriggered;
+  bool isInsideRadius = false;
 
   /// Convierte el modelo de Isar en la entidad de dominio.
   Alarm toEntity() => Alarm(
@@ -50,7 +51,8 @@ class AlarmModel {
       ..alarmHour = alarm.alarmHour
       ..alarmMinute = alarm.alarmMinute
       ..activeDays = List<bool>.from(alarm.activeDays)
-      ..lastTriggered = null;
+      ..lastTriggered = null
+      ..isInsideRadius = false;
     return model;
   }
 }

@@ -298,7 +298,6 @@ class AlarmasListView extends StatelessWidget {
                     ),
                     const SizedBox(height: 25),
                     
-                    // Botón Guardar / Actualizar
                     SizedBox(
                       width: double.infinity,
                       height: 55,
@@ -575,7 +574,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
   void _abrirConfiguracionAlarma(BuildContext context) {
     bool ignorarFestivos = true;
     final _nombreRutaController = TextEditingController();
-    double _radioSeleccionado = 500;
+    double _radioSeleccionado = 100;
 
     showModalBottomSheet(
       context: context,
@@ -615,7 +614,6 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                     ),
                     const SizedBox(height: 20),
                     
-                    // ⭐ REEMPLAZADO: Container del radio fijo por Slider configurable
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(15)),
@@ -642,9 +640,9 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                           ),
                           Slider(
                             value: _radioSeleccionado,
-                            min: 100,
-                            max: 2000,
-                            divisions: 19, // 100, 200, 300... 2000
+                            min: 1,
+                            max: 500,
+                            divisions: 499,
                             label: '${_radioSeleccionado.toInt()}m',
                             activeColor: const Color(0xFF2563EB),
                             onChanged: (value) {
@@ -656,8 +654,8 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('100m', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                              Text('2000m', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                              Text('1m', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                              Text('500m', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                             ],
                           ),
                         ],
