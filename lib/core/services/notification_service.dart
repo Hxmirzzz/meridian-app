@@ -38,7 +38,7 @@ class NotificationService {
 
   static Future<void> showAlarmNotification(int id, String title, String body) async {
     final androidDetails = AndroidNotificationDetails(
-      'alarm_channel',
+      'alarm_channel_v3',
       'Alarmas',
       channelDescription: 'Canal para alarmas',
       importance: Importance.max,
@@ -56,7 +56,7 @@ class NotificationService {
           'stop_alarm',
           '🔴 APAGAR ALARMA',
           showsUserInterface: true,
-          cancelNotification: false,
+          cancelNotification: true,
         ),
       ],
     );
@@ -81,13 +81,14 @@ class NotificationService {
 
   static void _onNotificationResponse(NotificationResponse response) {
     if (response.actionId == 'stop_alarm') {
-      _alarmActionController.add('open');
+      _alarmActionController.add('stop');
     }
   }
 
   @pragma('vm:entry-point')
   static void _onBackgroundNotificationResponse(NotificationResponse response) {
     if (response.actionId == 'stop_alarm') {
+      _alarmActionController.add('stop');
       _notifications.cancel(response.id ?? 0);
     }
   }

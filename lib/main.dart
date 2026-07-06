@@ -127,6 +127,8 @@ class _MainNavigatorState extends State<MainNavigator> with WidgetsBindingObserv
       await GpsForegroundService.requestPermissions();
       await GpsForegroundService.start();
       AlarmMonitorService().iniciarMonitoreo(context);
+
+      _checkAndShowAlarmDialog();
     });
   }
 
