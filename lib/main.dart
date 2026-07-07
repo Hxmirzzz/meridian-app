@@ -629,13 +629,13 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
   LatLng? _miUbicacionReal;
 
   final LatLng _ubicacionCasa = const LatLng(4.590093415680107, -74.17876583555564);
-  late LatLng _destinoActual;
+  LatLng _destinoActual = const LatLng(0, 0);
+  bool _destinoSeleccionado = false;
   late final List<Map<String, dynamic>> _lugaresSugeridos;
 
   @override
   void initState() {
     super.initState();
-    _destinoActual = _ubicacionCasa;
     
     _searchRepository = SearchRepository(
       remoteSource: RemoteSearchSource(client: http.Client()),
@@ -664,7 +664,6 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
         if (mounted) {
           setState(() {
             _miUbicacionReal = LatLng(position.latitude, position.longitude);
-            _destinoActual = _miUbicacionReal!;
           });
           _mapController.move(_miUbicacionReal!, 15.0);
         }
@@ -681,6 +680,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
   void _onMapTap(TapPosition tapPosition, LatLng latlng) {
     setState(() {
       _destinoActual = latlng;
+      _destinoSeleccionado = true;
     });
   }
 
@@ -800,11 +800,22 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                               throw Exception("Base de datos no inicializada");
                             }
 
+                            if (!_destinoSeleccionado) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('⚠️ Primero toca el mapa para seleccionar una ubicación'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                              return;
+                            }
+
                             final nuevaAlarmaUbicacion = AlarmModel()
                               ..name = _nombreRutaController.text.trim().isEmpty ? "Destino en Mapa" : _nombreRutaController.text.trim()
                               ..latitude = _destinoActual.latitude
-                              ..longitude = _destinoActual.longitude
-                              ..radiusMeters = _radioSeleccionado.toInt() // ⭐ USA EL RADIO SELECCIONADO
+                              ..longitude = _destinoActual.longitude 
+                              ..radiusMeters = _radioSeleccionado.toInt()
                               ..isActive = true
                               ..excludeHolidays = ignorarFestivos
                               ..createdAt = DateTime.now()
@@ -907,7 +918,7 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                   FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
-                      initialCenter: _destinoActual,
+                      initialCenter: _miUbicacionReal ?? _ubicacionCasa,
                       initialZoom: 15.0,
                       onTap: _onMapTap,
                     ),
@@ -952,14 +963,14 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                               ),
                             ),
 
-                          // Marcador rojo de la búsqueda actual
-                          Marker(
-                            point: _destinoActual,
-                            width: 50,
-                            height: 50,
-                            child: const Icon(Icons.location_on, color: Color(0xFFEF4444), size: 45),
-                          ),
-                          // Marcadores de las alarmas guardadas
+                          if (_destinoSeleccionado)
+                            Marker(
+                              point: _destinoActual,
+                              width: 50,
+                              height: 50,
+                              child: const Icon(Icons.location_on, color: Color(0xFFEF4444), size: 45),
+                            ),
+                          
                           ...alarmasUbicacion.map((alarma) => Marker(
                             point: LatLng(alarma.latitude, alarma.longitude),
                             width: 60,
@@ -995,8 +1006,9 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                       onSelected: (Map<String, dynamic> seleccion) {
                         setState(() {
                           _destinoActual = seleccion['coords'];
-                          _mapController.move(_destinoActual, 15.0);
+                          _destinoSeleccionado = true;
                         });
+                        _mapController.move(_destinoActual, 15.0);
                       },
                       fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
                         return Container(
