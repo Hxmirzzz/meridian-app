@@ -3,12 +3,15 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:isar_community/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'dart:math' as math; 
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:vibration/vibration.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'data/datasources/location_hardware_source.dart';
 import 'data/repositories/location_repository_impl.dart';
 import 'domain/repositories/location_repository.dart';
@@ -633,6 +636,9 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
   bool _destinoSeleccionado = false;
   late final List<Map<String, dynamic>> _lugaresSugeridos;
 
+  double? _heading;
+  StreamSubscription<CompassEvent>? _compassSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -652,6 +658,45 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
     ];
 
     _inicializarGPS();
+    _inicializarBrujula();
+  }
+
+  void _inicializarBrujula() {
+    _compassSubscription = FlutterCompass.events?.listen((event) {
+      if (mounted) {
+        setState(() {
+          _heading = event.heading;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _compassSubscription?.cancel();
+    super.dispose();
+  }
+
+  LatLng? _calcularPuntoAdelante(double metros)  {
+    if (_miUbicacionReal == null || _heading == null) return null;
+    
+    final headingRad = _heading! * (math.pi / 180);
+    const R = 6371000;
+    final d = metros / R;
+    
+    final lat1 = _miUbicacionReal!.latitude * (math.pi / 180);
+    final lon1 = _miUbicacionReal!.longitude * (math.pi / 180);
+    
+    final lat2 = math.asin(
+      math.sin(lat1) * math.cos(d) +
+      math.cos(lat1) * math.sin(d) * math.cos(headingRad)
+    );
+    final lon2 = lon1 + math.atan2(
+      math.sin(headingRad) * math.sin(d) * math.cos(lat1),
+      math.cos(d) - math.sin(lat1) * math.sin(lat2)
+    );
+    
+    return LatLng(lat2 * (180 / math.pi), lon2 * (180 / math.pi));
   }
 
   Future<void> _inicializarGPS() async {
@@ -945,24 +990,70 @@ class _ExplorarScreenState extends State<ExplorarScreen> {
                           if (_miUbicacionReal != null)
                             Marker(
                               point: _miUbicacionReal!,
-                              width: 24,
-                              height: 24,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.blue,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 3),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.blue.withOpacity(0.5),
-                                      blurRadius: 10,
-                                      spreadRadius: 4,
-                                    )
-                                  ]
+                              width: 50,  // Más grande para la flecha
+                              height: 50,
+                              child: GestureDetector(
+                                onTap: () {
+                                  // ✅ Al tocar, coloca alarma 100m adelante
+                                  final punto = _calcularPuntoAdelante(100);
+                                  if (punto != null) {
+                                    setState(() {
+                                      _destinoActual = punto;
+                                      _destinoSeleccionado = true;
+                                    });
+                                    _mapController.move(punto, 17.0);
+                                    
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('📍 Alarma colocada a 100m en dirección ${_heading?.toInt()}°'),
+                                        backgroundColor: Colors.orange,
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: Transform.rotate(
+                                  angle: (_heading ?? 0) * (math.pi / 180),
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      // Círculo azul base
+                                      Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white, width: 3),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.blue.withOpacity(0.5),
+                                              blurRadius: 10,
+                                              spreadRadius: 4,
+                                            )
+                                          ],
+                                        ),
+                                      ),
+                                      // Flecha que apunta hacia adelante (arriba en el widget)
+                                      Positioned(
+                                        top: 2,
+                                        child: Container(
+                                          width: 0,
+                                          height: 0,
+                                          decoration: BoxDecoration(
+                                            border: Border(
+                                              left: BorderSide(width: 6, color: Colors.transparent),
+                                              right: BorderSide(width: 6, color: Colors.transparent),
+                                              bottom: BorderSide(width: 10, color: Colors.white),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-
                           if (_destinoSeleccionado)
                             Marker(
                               point: _destinoActual,
